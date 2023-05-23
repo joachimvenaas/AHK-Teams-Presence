@@ -5,24 +5,39 @@ SetWorkingDir %A_ScriptDir% ; Ensures a consistent starting directory.
 #SingleInstance force
 #Persistent
 
+; Config
+TeamsLogFile := "C:\Users\venaasj\AppData\Roaming\Microsoft\Teams\logs.txt"
+WebhookURI = http://172.17.13.240:8000/api/webhook/
+Username := "joachim"
 
-; Set the Webhook URI to POST to
-WebhookURI = <ADD YOUR WEBHOOK URI HERE e.g. https://your-home-assistant:8123/api/webhook/some_hook_id>
 
 ;Set a default Status
-CurrentStatus = Unknown
+CurrentStatus = "Offline"
 
-; Send a heartbeat webhook anyway every 5 mins
-SetTimer, SendWebhook, 300000
+; Send a heartbeat webhook anyway every 1 mins
+SetTimer, SendWebhook, 60000
 
-logPath = %A_AppData%\Microsoft\Teams\logs.txt
-lt := new CLogTailer(logPath, Func("NewLine"))
+; Set initial status on start
+loop, Read, %TeamsLogFile%
+{
+	if A_LoopReadLine
+	{
+		if (instr(A_LoopReadLine, "StatusIndicatorStateService: Added"))
+		    Last_Line := A_LoopReadLine
+	}
+
+}
+NewLine(Last_Line)
+
+
+lt := new CLogTailer(TeamsLogFile, Func("NewLine"))
 return
 
 
 NewLine(text)
 {
 global CurrentStatus
+#ReadStatus := RegExMatch(text, "Setting the taskbar overlay icon - (?!New)([A-Za-z ]*) ", StatusText)
 ReadStatus := RegExMatch(text, "StatusIndicatorStateService: Added (?!NewActivity)(\w+)", StatusText)
 if (ReadStatus != 0)
  {
@@ -69,9 +84,11 @@ SendWebhook()
 	WinHTTP := ComObjCreate("WinHTTP.WinHttpRequest.5.1")
 	WinHTTP.Open("POST", WebhookURI, 0)
 	WinHTTP.SetRequestHeader("Content-Type", "application/json")
-	Body = {"status":"%CurrentStatus%"}
+	Body = { "uid": "%UserName%", "status":"%CurrentStatus%" }
 	WinHTTP.Send(Body)
 	Result := WinHTTP.ResponseText
 	Status := WinHTTP.Status
   }
 }
+
+
